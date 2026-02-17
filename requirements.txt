@@ -1,0 +1,29 @@
+# Core (rebrowser-playwright = Playwright with CDP Runtime.Enable fix for anti-detection)
+rebrowser-playwright>=1.52.0
+python-chess>=1.999
+playwright-stealth>=2.0.0
+
+# Vision (optional): for screenshot->FEN fallback when DOM fails
+#   pip install "chesscog @ git+https://github.com/georg-wolflein/chesscog.git"
+#   python -m chesscog.occupancy_classifier.download_model
+#   python -m chesscog.piece_classifier.download_model
+# Uncomment to install chesscog (adds PyTorch etc.):
+# chesscog @ git+https://github.com/georg-wolflein/chesscog.git
+
+# Stockfish: install binary separately (e.g. sudo apt install stockfish, or download from stockfishchess.org)
+# Set STOCKFISH_PATH in .env or config to engine path if not in PATH.
+
+# Vision: ONNX runtime (lightweight; use when onnx_models/ is present)
+onnxruntime>=1.14.0
+
+# NumPy/PIL for image handling (used by our code and chesscog)
+numpy>=1.24.0
+Pillow>=10.0.0
+opencv-python-headless>=4.8.0
+
+# Assist mode (screen capture, no browser)
+mss>=9.0.0
+
+# Config
+python-dotenv>=1.0.0
+pyyaml>=6.0

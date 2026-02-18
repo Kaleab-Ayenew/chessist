@@ -50,6 +50,32 @@ def find_board_corners_contour(img: np.ndarray) -> Optional[np.ndarray]:
     Detect 4 board corners using contour detection.
     Returns (4, 2) float32 array [top-left, top-right, bottom-right, bottom-left] or None.
     """
+    return find_board_corners_contour_debug(img, debug=None)
+
+
+def _save_image(path: Path | str, img: np.ndarray) -> None:
+    """
+    Save an RGB/gray numpy image to disk.
+    OpenCV expects BGR for color; this helper converts RGB->BGR when needed.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    out = img
+    if img.ndim == 3 and img.shape[2] == 3:
+        out = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    cv2.imwrite(str(path), out)
+
+
+def find_board_corners_contour_debug(
+    img: np.ndarray,
+    *,
+    debug: Optional[dict] = None,
+) -> Optional[np.ndarray]:
+    """
+    Contour-based board corner detection with optional debug capture.
+    If debug is provided, may populate:
+      - debug["edges"] = the (h,w) uint8 edge image used for contours
+    """
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) if img.ndim == 3 else img
     h, w = gray.shape
     min_area = (min(h, w) ** 2) * 0.05  # board at least ~5% of image
@@ -60,6 +86,8 @@ def find_board_corners_contour(img: np.ndarray) -> Optional[np.ndarray]:
     kernel = np.ones((3, 3), np.uint8)
     edges = cv2.dilate(edges, kernel)
     edges = cv2.erode(edges, kernel)
+    if debug is not None:
+        debug["edges"] = edges
 
     contours, _ = cv2.findContours(
         edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -544,6 +572,8 @@ def image_to_fen_template(
     edge_weight: float = 0.5,
     edge_method: str = "gradient",
     save_marked_path: Optional[Path | str] = None,
+    save_warped_path: Optional[Path | str] = None,
+    save_edges_path: Optional[Path | str] = None,
 ) -> Optional[str]:
     """
     Run the template-based pipeline: extract board -> warp -> 64 squares -> template match -> FEN.
@@ -559,17 +589,27 @@ def image_to_fen_template(
         return None
 
     if empty_threshold is None:
-        empty_threshold = 0.82
+        # Stricter default so occupied squares are not misclassified as empty (avoids empty FEN on a full board)
+        empty_threshold = 0.90
     if piece_threshold is None:
         piece_threshold = match_threshold if match_threshold > 0 else 0.45
 
+    debug: dict | None = {} if (method == "contour" and save_edges_path) else None
+
     if method == "contour":
-        corners = find_board_corners_contour(img)
+        corners = find_board_corners_contour_debug(img, debug=debug)
     elif method == "edges":
         corners = find_board_corners_edges(img)
     else:
         logger.warning("Unknown method %r, using contour", method)
-        corners = find_board_corners_contour(img)
+        corners = find_board_corners_contour_debug(img, debug=debug)
+
+    if save_edges_path and debug is not None and isinstance(debug.get("edges"), np.ndarray):
+        try:
+            _save_image(save_edges_path, debug["edges"])
+            logger.info("Saved board-detection edges image to %s", save_edges_path)
+        except Exception as e:
+            logger.debug("Could not save edges debug image: %s", e)
 
     if corners is None:
         logger.debug("Board corners not detected (method=%s)", method)
@@ -579,6 +619,12 @@ def image_to_fen_template(
         save_marked_board_image(img, corners, save_marked_path)
 
     warped = _warp_board(img, corners)
+    if save_warped_path:
+        try:
+            _save_image(save_warped_path, warped)
+            logger.info("Saved warped/extracted board image to %s", save_warped_path)
+        except Exception as e:
+            logger.debug("Could not save warped board image: %s", e)
     squares = _extract_squares(warped)
     templates = load_templates(templates_dir, target_size=SQUARE_SIZE)
     if not templates:

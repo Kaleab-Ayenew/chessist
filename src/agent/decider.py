@@ -27,38 +27,93 @@ def get_engine_limits():
     }
 
 
-def best_move(fen: str, *, white_to_move: Optional[bool] = None) -> Optional[chess.Move]:
-    """
-    Return best move (UCI) as chess.Move for the given board FEN.
-    fen can be piece-placement only (board_fen); if so, pass white_to_move.
-    """
+# Piece placement for an empty board (no pieces); vision often returns this when no real board is visible.
+EMPTY_BOARD_FEN = "8/8/8/8/8/8/8/8"
+
+
+def is_empty_board_fen(fen: str) -> bool:
+    """Return True if FEN describes an empty board (no pieces). Treat as 'no board' for assist."""
+    if not fen or not fen.strip():
+        return True
+    placement = fen.split()[0].strip() if fen else ""
+    return placement == EMPTY_BOARD_FEN
+
+
+def is_valid_fen(fen: str) -> bool:
+    """Return True if the FEN string is valid (piece placement parseable by python-chess)."""
     try:
         if " " in fen:
-            board = chess.Board(fen)
+            chess.Board(fen)
         else:
             board = chess.Board()
             board.set_board_fen(fen)
-            if white_to_move is not None:
-                board.turn = chess.WHITE if white_to_move else chess.BLACK
-    except Exception as e:
-        logger.warning("Invalid FEN for engine: %s", e)
+        return True
+    except Exception:
+        return False
+
+
+def _board_from_fen(fen: str, white_to_move: Optional[bool] = None) -> Optional[chess.Board]:
+    try:
+        if " " in fen:
+            return chess.Board(fen)
+        board = chess.Board()
+        board.set_board_fen(fen)
+        if white_to_move is not None:
+            board.turn = chess.WHITE if white_to_move else chess.BLACK
+        return board
+    except Exception:
         return None
 
-    path = get_engine_path()
+
+def best_move(
+    fen: str,
+    *,
+    white_to_move: Optional[bool] = None,
+    engine: Optional[chess.engine.SimpleEngine] = None,
+) -> Optional[chess.Move]:
+    """
+    Return best move for the given board FEN.
+    If engine is provided, use it (caller owns lifecycle). Otherwise spawn and close a new process.
+    """
+    board = _board_from_fen(fen, white_to_move=white_to_move)
+    if board is None:
+        logger.warning("Invalid FEN for engine")
+        return None
+
     limits = get_engine_limits()
+    path = get_engine_path()
+    own_engine = False
+    if engine is None:
+        try:
+            engine = chess.engine.SimpleEngine.popen_uci(path)
+            own_engine = True
+        except FileNotFoundError:
+            logger.error("Stockfish not found at %s. Install it or set stockfish_path in config.", path)
+            return None
+
     try:
-        with chess.engine.SimpleEngine.popen_uci(path) as engine:
-            result = engine.play(
-                board,
-                chess.engine.Limit(time=limits["time"], depth=limits["depth"]),
-            )
-            return result.move
+        result = engine.play(
+            board,
+            chess.engine.Limit(time=limits["time"], depth=limits["depth"]),
+        )
+        return result.move
+    except chess.engine.EngineTerminatedError as e:
+        logger.warning("Engine crashed (e.g. exit -11): %s. Try a different Stockfish build (e.g. non-AVX2).", e)
+        if not own_engine:
+            raise  # Caller can restart the engine
+        return None
     except FileNotFoundError:
-        logger.error("Stockfish not found at %s. Install it (e.g. apt install stockfish) or set STOCKFISH_PATH.", path)
+        logger.error("Stockfish not found at %s.", path)
         return None
     except Exception as e:
         logger.warning("Engine play failed: %s", e)
         return None
+    finally:
+        if own_engine and engine is not None:
+            try:
+                engine.quit()
+            except Exception:
+                pass
 
 
 def move_to_uci(move: chess.Move) -> str:

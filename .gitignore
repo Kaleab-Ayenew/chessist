@@ -9,17 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
-# Assist mode debug (last capture overwritten each poll)
-last_assist_screenshot.png
-
-# Template pipeline debug (marked board quad)
-last_contour_marked.png
-last_edges_marked.png
-
-# Optional sample for vision tests (user adds their own)
-sample_screenshot.png
-sample_screenshot_*.png
-
 # User config (copy from config.example.yaml)
 config.yaml
 

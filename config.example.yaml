@@ -1,46 +1,21 @@
-# Autonomous Chess Agent — Example config
-# Copy to config.yaml and adjust.
+# Auto Chess — Example config. Copy to config.yaml and adjust.
 
-# Stockfish engine path (optional; if not set, uses "stockfish" from PATH)
-# stockfish_path: "/usr/bin/stockfish"
+# stockfish_path: "/usr/bin/stockfish"   # optional; default: "stockfish" from PATH
 
-# Engine search limits (blitz/bullet friendly)
 engine:
-  time_limit_seconds: 0.15   # max time per move
-  depth_limit: 18            # max depth (optional; time usually hits first)
+  time_limit_seconds: 0.15
+  depth_limit: 18
 
-# Humanization (Gaussian noise)
-humanization:
-  reaction_time_mean_ms: 800
-  reaction_time_std_ms: 150
-  move_time_mean_ms: 250
-  move_time_std_ms: 50
-  click_jitter_std_fraction: 0.15  # jitter as fraction of square size (e.g. 0.15 = 15%)
+# assist_poll_seconds: 2.0   # poll interval (seconds)
 
-# Observation: vision is primary, DOM is fallback (true = use vision first)
-prefer_vision: true
-
-# Chess.com base URL (for navigation)
-chess_com_base: "https://www.chess.com"
-
-# Assist mode (--assist): no browser; you open Chess.com, app shows recommended move
-# assist_poll_seconds: 2.0
-# Optional: capture only this screen region (omit to use full screen; vision finds board)
-# assist_region:
-#   left: 100
-#   top: 200
-#   width: 400
-#   height: 400
-
-# Template-based FEN pipeline (--test-vision-template): theme-agnostic piece detection
+# Theme-agnostic template FEN (board extraction + piece matching)
 # template_fen:
 #   templates_dir: "templates"   # wp.png, bk.png, 200.png; optional 200_light.png, 200_dark.png for empty
 #   board_extraction: "contour"  # "contour" or "edges"
-#   template_match_threshold: 0.5   # fallback piece threshold if piece_threshold not set
-#   empty_threshold: 0.82        # max correlation to empty template -> label square empty (when variance not used)
-#   piece_threshold: 0.45        # min correlation for piece when square is occupied
-#   variance_empty_threshold: 100 # if set: center variance below this -> empty (flat); high variance -> piece matching only (avoids dark-on-dark mislabel)
-#   normalize: true              # grayscale zero-mean unit-variance before matching (theme-agnostic)
-#   use_edges: true              # combine normalized + edge (shape) score for piece choice; helps dark-on-dark
-#   edge_weight: 0.5             # weight for edge score (1 - edge_weight for normalized)
-#   edge_method: "gradient"      # "gradient" (Sobel magnitude) or "canny"
+#   empty_threshold: 0.9        # min correlation to empty template to label square empty
+#   piece_threshold: 0.1        # min correlation for piece (theme-agnostic: low allows shape/edge match)
+#   normalize: true             # grayscale zero-mean unit-variance (theme-agnostic)
+#   variance_empty_threshold: 100.0  # center variance below this -> empty (flat); above -> piece matching only
+#   use_edges: true             # combine normalized + edge (shape) score for piece choice
+#   edge_weight: 0.5            # 0 = normalized only, 1 = edge only
+#   edge_method: "gradient"      # "gradient" (Sobel) or "canny"

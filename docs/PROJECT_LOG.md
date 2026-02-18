@@ -4,6 +4,91 @@ Living document: updated whenever the codebase or project setup changes. (Cursor
 
 ---
 
+## 2026-02-18 (Production-ready cleanup and PyPI prep)
+
+- **Changed** Debug images (assist + test-vision) now saved to a cross-platform temp directory (`tempfile.gettempdir()/auto_chess/`) instead of project root; `.gitignore` no longer ignores `last_*.png` or `sample_screenshot.png`.
+- **Changed** Config loading: prefer `config.yaml` in current working directory, then package root; `templates_dir` resolved relative to config directory.
+- **Added** `src/__init__.py`, `src/agent/__main__.py` for `python -m src.agent` and `auto-chess` console script; production `pyproject.toml` with metadata, dependencies, and `[project.scripts]`.
+- **Changed** `main.py` — delegates to `src.agent.__main__:_main`; test-vision and assist look for `sample_screenshot.png` and `templates/` in cwd then package root; test-vision writes marked image to temp dir.
+- **Removed** `notebooks/theme_agnostic_piece_detection.ipynb` and its checkpoint; kept only `notebooks/vision_template_workflow.ipynb`.
+- **Removed** `src/agent/assist_region_picker.py` and `save_assist_region()` from `config.py` (assist uses full-screen only).
+- **Changed** README.md — production setup (venv, pip install -e ., pip install auto-chess), usage, config table, debug images section, single `sample_screenshot.png` for tests/demo.
+- **Changed** docs/SETUP.md — shortened; points to README; removed `--assist-set-region` references.
+- **Changed** config.example.yaml — title to "Auto Chess".
+
+---
+
+## 2026-02-18 (Skip Stockfish when FEN unchanged)
+
+- **Changed** `src/agent/assist_loop.py` — Only call Stockfish when the current FEN differs from the last one; track `last_fen` and skip engine + move output when `fen == last_fen`. Reset `last_fen` when no board is detected.
+
+---
+
+## 2026-02-18 (Theme-agnostic template_fen config)
+
+- **Changed** `config.yaml` — Added `template_fen` with theme-agnostic thresholds: empty_threshold 0.9, piece_threshold 0.1, variance_empty_threshold 100, use_edges true, edge_weight 0.5, edge_method gradient.
+- **Changed** `config.example.yaml` — Updated template_fen comments to match theme-agnostic defaults.
+
+---
+
+## 2026-02-18 (Template matching: avoid empty FEN on full board)
+
+- **Changed** `src/agent/vision_template.py` — Default `empty_threshold` raised from 0.82 to 0.90 so occupied squares are not misclassified as empty; warped board was correct but every square matched empty template and produced FEN `8/8/8/8/8/8/8/8`. Stricter empty threshold lets piece matching run for occupied squares.
+- **Changed** `config.example.yaml` — Comment for `empty_threshold` updated (default 0.90, note about empty FEN on full board).
+
+---
+
+## 2026-02-18 (Vision debug artifacts: mark + extract board)
+
+- **Changed** `src/agent/assist_loop.py` — Save “last” board-detection artifacts each poll: `last_board_marked.png` (quad overlay), `last_board_warped.png` (extracted/warped board), `last_board_edges.png` (contour edges debug).
+- **Changed** `src/agent/vision_template.py`, `src/agent/orient.py` — Added optional debug save paths so the extraction step can be inspected when board detection fails.
+- **Changed** `.gitignore` — ignore the new `last_board_*.png` debug artifacts.
+
+---
+
+## 2026-02-18 (No board: empty FEN → skip engine, say "no board")
+
+- **Changed** `src/agent/decider.py` — Added `EMPTY_BOARD_FEN` and `is_empty_board_fen(fen)`; empty board is treated as no board.
+- **Changed** `src/agent/assist_loop.py` — When vision returns empty board FEN (`8/8/8/8/8/8/8/8`), treat as no board: log "Vision: no board detected" and skip Stockfish (avoids engine crash and clears error once a real board is shown).
+
+---
+
+## 2026-02-18 (FEN logging and validation)
+
+- **Changed** `src/agent/assist_loop.py` — Print generated FEN to stdout before calling Stockfish; validate FEN with `is_valid_fen()` and skip engine when invalid (log warning and continue).
+- **Added** `src/agent/decider.py` — `is_valid_fen(fen)` to check FEN parseability (piece placement) before feeding to engine.
+
+---
+
+## 2026-02-18 (Stockfish reuse and crash handling)
+
+- **Changed** `src/agent/decider.py` — `best_move()` accepts optional `engine`; when provided, the same process is reused and `EngineTerminatedError` is propagated so the caller can restart.
+- **Changed** `src/agent/assist_loop.py` — Start Stockfish once per session and pass it into `best_move()`; on `EngineTerminatedError` (e.g. exit -11), log and restart the engine; quit engine in `finally`.
+
+---
+
+## 2026-02-18 (Full-screen only; contour+edges fallback; no region crop)
+
+- **Changed** `src/agent/assist_loop.py` — Always capture full screen; removed region crop and `assist_region` config.
+- **Changed** `src/agent/orient.py` — Use `np.ascontiguousarray(image_rgb)` so mss screenshots work with OpenCV; try preferred `board_extraction` then fallback to the other method (contour → edges or edges → contour) when board not detected.
+- **Changed** `main.py` — Removed `--assist-set-region`; docstring updated.
+- **Changed** `src/agent/config.py`, `config.example.yaml` — Removed `assist_region` from defaults and example.
+
+---
+
+## 2026-02-18 (Assist-only pipeline: template vision, overlay, no Playwright/ONNX)
+
+- **Changed** `main.py` — Assist-only entry: removed Playwright/browser path. Default run is assist with overlay; `--assist-set-region`, `--test-vision-template` only. No async, no browser args.
+- **Changed** `src/agent/orient.py` — Template vision only: `image_to_fen_cv()` calls `vision_template.image_to_fen_template()` with config (`template_fen`, `templates_dir`). Removed ONNX and chesscog.
+- **Removed** `src/agent/vision_onnx.py` — ONNX workflow deleted.
+- **Changed** `requirements.txt` — Removed rebrowser-playwright, playwright-stealth, onnxruntime. Kept python-chess, numpy, Pillow, opencv-python-headless, mss, dotenv, pyyaml.
+- **Changed** `tests/test_vision_sample.py` — Removed ONNX-based tests (`TestVisionSampleScreenshot`). Kept `TestVisionTemplatePipeline`.
+- **Changed** `src/agent/config.py` — Dropped `prefer_vision`, `chess_com_base`, `humanization` from defaults.
+- **Changed** `README.md`, `docs/SETUP.md` — Document assist-only pipeline, template vision, overlay; removed Playwright/ONNX/chesscog setup.
+- **Changed** `scripts/setup.py` — Install only requirements.txt and Stockfish; removed chesscog, ONNX, Playwright install and verification.
+
+---
+
 ## 2026-02-17 (Occupancy by intensity only; edge for piece choice)
 
 - **Changed** `src/agent/vision_template.py` — occupancy now uses **normalized intensity only** when comparing to empty templates; edge/combined score is used **only for piece template choice**. Fixes “all squares labeled empty” when use_edges was True (empty template matched board edges on every square).

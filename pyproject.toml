@@ -1,7 +1,47 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "auto-chess"
 version = "0.1.0"
-description = "Add your description here"
+description = "Chess assist: screen capture, template-based board vision (FEN), Stockfish, and real-time move overlay."
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.10"
-dependencies = []
+authors = [
+    { name = "Auto Chess Contributors" }
+]
+keywords = ["chess", "stockfish", "computer-vision", "fen", "assist"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment :: Board Games",
+]
+dependencies = [
+    "python-chess>=1.999",
+    "numpy>=1.24.0",
+    "Pillow>=10.0.0",
+    "opencv-python-headless>=4.8.0",
+    "mss>=9.0.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+auto-chess = "src.agent.__main__:_main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

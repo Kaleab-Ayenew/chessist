@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-Full setup script for the Autonomous Chess Agent.
-Supports Linux, Windows, and macOS. Run from project root:
-  python scripts/setup.py
-  # or: python -m scripts.setup (from project root with PYTHONPATH=.)
+Setup script for Chess Assist (template vision + Stockfish overlay).
+Run from project root: python scripts/setup.py
+Creates venv, installs requirements.txt, optionally downloads Stockfish, copies config.
 """
 from __future__ import annotations
 
@@ -22,7 +21,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 VENV_DIR = PROJECT_ROOT / ".venv"
 STOCKFISH_DIR = PROJECT_ROOT / ".stockfish"
-ONNX_MODELS_DIR = PROJECT_ROOT / "onnx_models"
 ENV_FILE = PROJECT_ROOT / ".env"
 CONFIG_EXAMPLE = PROJECT_ROOT / "config.example.yaml"
 CONFIG_FILE = PROJECT_ROOT / "config.yaml"
@@ -119,62 +117,7 @@ def install_requirements() -> bool:
         log("Bootstrapping pip in venv...")
         run([str(py), "-m", "ensurepip", "--upgrade"], env=os.environ.copy())
     cmd = [str(py), "-m", "pip", "install", "-r", str(REQUIREMENTS)]
-    if not run(cmd):
-        return False
-    # Vision: use ONNX if onnx_models/ already present (e.g. copied from export); else install chesscog+torch
-    if (ONNX_MODELS_DIR / "metadata.json").exists() and (ONNX_MODELS_DIR / "occupancy.onnx").exists() and (ONNX_MODELS_DIR / "piece.onnx").exists():
-        log("onnx_models/ found; skipping PyTorch and chesscog (vision will use ONNX).")
-        return True
-    # Install torch/torchvision first so we get versions with wheels (chesscog pins old versions that may not exist)
-    log("Installing PyTorch and torchvision (for chesscog)...")
-    if not run([str(py), "-m", "pip", "install", "torch", "torchvision"]):
-        log("ERROR: PyTorch install failed. Vision is required (or place onnx_models/ and re-run setup).")
-        return False
-    # Install chesscog without deps to avoid impossible torchvision<0.11 constraint, then install its other deps
-    log("Installing chesscog (vision model)...")
-    if not run([str(py), "-m", "pip", "install", "chesscog @ git+https://github.com/georg-wolflein/chesscog.git", "--no-deps"]):
-        log("ERROR: chesscog install failed. Vision is required.")
-        return False
-    log("Installing chesscog runtime dependencies...")
-    chesscog_deps = [
-        "recap", "googledrivedownloader", "osfclient", "matplotlib", "pandas",
-        "scikit-learn", "tqdm", "tensorboard",
-    ]
-    if not run([str(py), "-m", "pip", "install"] + chesscog_deps):
-        log("ERROR: chesscog dependencies failed. Vision is required.")
-        return False
-    return True
-
-
-def download_chesscog_models() -> bool:
-    """Download chesscog models (required when not using ONNX vision)."""
-    if (ONNX_MODELS_DIR / "metadata.json").exists():
-        log("onnx_models/ present; skipping chesscog model download.")
-        return True
-    py = get_python_exe()
-    if not py.exists():
-        log("Venv Python not found.")
-        return False
-    r = subprocess.run([str(py), "-c", "import chesscog"], cwd=PROJECT_ROOT, capture_output=True)
-    if r.returncode != 0:
-        log("Chesscog not installed; cannot download models.")
-        return False
-    log("Downloading chesscog models (occupancy + piece classifier)...")
-    code = (
-        "from chesscog.occupancy_classifier.download_model import ensure_model as e1; "
-        "from chesscog.piece_classifier.download_model import ensure_model as e2; "
-        "e1(show_size=True); e2(show_size=True)"
-    )
-    if not run([str(py), "-c", code], env=os.environ.copy()):
-        log("ERROR: chesscog model download failed. Vision cannot run.")
-        return False
-    log("Chesscog models ready.")
-    return True
-
-
-def install_playwright_browsers() -> bool:
-    py = get_python_exe()
-    return run([str(py), "-m", "playwright", "install", "chromium"])
+    return run(cmd)
 
 
 def fetch_stockfish_asset_url() -> tuple[str | None, str | None]:
@@ -338,15 +281,7 @@ def ensure_config() -> bool:
 
 
 def main() -> int:
-    log("Autonomous Chess Agent — full setup (Linux / Windows / macOS)")
-    # Vision (chesscog) is required and only supports Python 3.8–3.10
-    if sys.version_info >= (3, 11):
-        log("ERROR: Vision requires Python 3.10 or earlier (chesscog does not support 3.11+).")
-        log("Create a venv with Python 3.10 and re-run setup, e.g.:")
-        log("  python3.10 -m venv .venv")
-        log("  source .venv/bin/activate   # or .venv\\Scripts\\activate on Windows")
-        log("  python scripts/setup.py")
-        return 1
+    log("Chess Assist — setup (template vision + Stockfish)")
     os.chdir(PROJECT_ROOT)
     if not REQUIREMENTS.exists():
         log(f"Requirements not found: {REQUIREMENTS}. Run from project root.")
@@ -355,21 +290,6 @@ def main() -> int:
         return 1
     if not install_requirements():
         return 1
-    if not download_chesscog_models():
-        return 1
-    # Verify vision: either ONNX models or chesscog
-    py = get_python_exe()
-    if (ONNX_MODELS_DIR / "metadata.json").exists() and (ONNX_MODELS_DIR / "occupancy.onnx").exists():
-        r = subprocess.run([str(py), "-c", "import onnxruntime"], cwd=PROJECT_ROOT, capture_output=True)
-        if r.returncode != 0:
-            log("WARNING: onnx_models/ present but onnxruntime check failed. Install with: pip install onnxruntime")
-    else:
-        r = subprocess.run([str(py), "-c", "import chesscog"], cwd=PROJECT_ROOT, capture_output=True)
-        if r.returncode != 0:
-            log("ERROR: chesscog (vision) is required but not installed. Setup cannot continue (or add onnx_models/ and re-run).")
-            return 1
-    if not install_playwright_browsers():
-        log("Warning: Playwright Chromium install failed. Run: python -m playwright install chromium")
     if ensure_stockfish():
         dest = STOCKFISH_DIR / ("stockfish.exe" if sys.platform == "win32" else "stockfish")
         if dest.exists():

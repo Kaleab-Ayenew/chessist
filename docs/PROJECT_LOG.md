@@ -4,6 +4,12 @@ Living document: updated whenever the codebase or project setup changes. (Cursor
 
 ---
 
+## 2026-02-24
+
+- **Changed** `README.md` — Complete rewrite with modern design: centered header with badges, feature table, ASCII pipeline diagram, cleaner sections for quick start, configuration, templates, and building. Renamed project to "Chessist" in docs.
+
+---
+
 ## 2026-02-23 (Cross-Platform Build Support)
 
 - **Changed** `auto_chess.spec` — Made cross-platform: platform-conditional hidden imports (`Xlib` on Linux, `win32api`/`win32con`/`pywintypes`/`win32gui` on Windows), optional `.ico` icon on Windows.

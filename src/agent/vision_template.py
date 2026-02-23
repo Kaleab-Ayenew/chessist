@@ -251,10 +251,18 @@ def _extract_squares(warped: np.ndarray) -> list[np.ndarray]:
     return squares
 
 
-def _square_index_to_chess_square(row: int, col: int) -> int:
-    """Map (row, col) in warped image to chess square. row 0 = rank 8, col 0 = file a."""
-    file_idx = col
-    rank = 7 - row
+def _square_index_to_chess_square(row: int, col: int, white_perspective: bool = True) -> int:
+    """
+    Map (row, col) in warped image to chess square.
+    white_perspective=True: row 0 = rank 8, col 0 = file a (White at bottom of screen).
+    white_perspective=False: row 0 = rank 1, col 0 = file h (Black at bottom of screen).
+    """
+    if white_perspective:
+        file_idx = col
+        rank = 7 - row
+    else:
+        file_idx = 7 - col
+        rank = row
     return chess.square(file_idx, rank)
 
 
@@ -533,9 +541,12 @@ def _match_square_to_templates(
 # ---------------------------------------------------------------------------
 
 
-def _squares_to_fen(square_fen_chars: list[str]) -> str:
-    """Build FEN piece placement from 64 FEN characters (row 0 = rank 8, col 0 = file a)."""
-    # square_fen_chars[i] for i = row*8+col -> rank 8-row, file col
+def _squares_to_fen(square_fen_chars: list[str], white_perspective: bool = True) -> str:
+    """
+    Build FEN piece placement from 64 FEN characters.
+    white_perspective=True: row 0 = rank 8, col 0 = file a (White at bottom).
+    white_perspective=False: row 0 = rank 1, col 0 = file h (Black at bottom).
+    """
     board = chess.Board()
     board.clear()
     for row in range(8):
@@ -543,7 +554,7 @@ def _squares_to_fen(square_fen_chars: list[str]) -> str:
             idx = row * 8 + col
             c = square_fen_chars[idx]
             if c and c != ".":
-                sq = _square_index_to_chess_square(row, col)
+                sq = _square_index_to_chess_square(row, col, white_perspective)
                 try:
                     piece = chess.Piece.from_symbol(c)
                     board.set_piece_at(sq, piece)
@@ -649,4 +660,91 @@ def image_to_fen_template(
         )
         for sq in squares
     ]
-    return _squares_to_fen(square_fen_chars)
+    return _squares_to_fen(square_fen_chars, white_perspective=white_to_move)
+
+
+def image_to_fen_template_with_corners(
+    img: np.ndarray,
+    templates_dir: Path | str,
+    *,
+    method: str = "contour",
+    white_to_move: bool = True,
+    match_threshold: float = 0.5,
+    empty_threshold: Optional[float] = None,
+    piece_threshold: Optional[float] = None,
+    normalize: bool = True,
+    variance_empty_threshold: Optional[float] = None,
+    use_edges: bool = False,
+    edge_weight: float = 0.5,
+    edge_method: str = "gradient",
+    save_marked_path: Optional[Path | str] = None,
+    save_warped_path: Optional[Path | str] = None,
+    save_edges_path: Optional[Path | str] = None,
+) -> Optional[tuple[str, np.ndarray]]:
+    """
+    Same as image_to_fen_template but returns (fen, corners) when board is found.
+    corners: (4, 2) float32 in image coords [top-left, top-right, bottom-right, bottom-left].
+    Returns None if board not detected.
+    """
+    templates_dir = Path(templates_dir)
+    if not templates_dir.is_dir():
+        logger.warning("Templates dir not found: %s", templates_dir)
+        return None
+
+    if empty_threshold is None:
+        empty_threshold = 0.90
+    if piece_threshold is None:
+        piece_threshold = match_threshold if match_threshold > 0 else 0.45
+
+    debug: dict | None = {} if (method == "contour" and save_edges_path) else None
+
+    if method == "contour":
+        corners = find_board_corners_contour_debug(img, debug=debug)
+    elif method == "edges":
+        corners = find_board_corners_edges(img)
+    else:
+        corners = find_board_corners_contour_debug(img, debug=debug)
+
+    if save_edges_path and debug is not None and isinstance(debug.get("edges"), np.ndarray):
+        try:
+            _save_image(save_edges_path, debug["edges"])
+        except Exception:
+            pass
+
+    if corners is None:
+        return None
+
+    if save_marked_path:
+        save_marked_board_image(img, corners, save_marked_path)
+
+    warped = _warp_board(img, corners)
+    if save_warped_path:
+        try:
+            _save_image(save_warped_path, warped)
+        except Exception:
+            pass
+    squares = _extract_squares(warped)
+    templates = load_templates(templates_dir, target_size=SQUARE_SIZE)
+    if not templates:
+        return None
+
+    empty_templates = [(t, m, c) for t, m, c in templates if c == "."]
+    piece_templates = [(t, m, c) for t, m, c in templates if c != "."]
+
+    square_fen_chars = [
+        _match_square_to_templates(
+            sq,
+            empty_templates,
+            piece_templates,
+            empty_threshold,
+            piece_threshold,
+            normalize=normalize,
+            variance_empty_threshold=variance_empty_threshold,
+            use_edges=use_edges,
+            edge_weight=edge_weight,
+            edge_method=edge_method,
+        )
+        for sq in squares
+    ]
+    fen = _squares_to_fen(square_fen_chars, white_perspective=white_to_move)
+    return (fen, corners)

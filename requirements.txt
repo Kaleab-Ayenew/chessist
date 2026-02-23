@@ -14,3 +14,6 @@ mss>=9.0.0
 # Config
 python-dotenv>=1.0.0
 pyyaml>=6.0
+
+# Auto-play (screen interaction)
+pyautogui>=0.9.54

@@ -28,6 +28,32 @@ def move_delay_ms() -> float:
     return _gauss(mean, std, 50, 800)
 
 
+def mouse_move_duration(distance_px: float) -> float:
+    """
+    Calculate humanized mouse movement duration based on distance.
+    Uses Fitts's Law approximation: longer distances take more time, with some randomness.
+    Returns duration in seconds.
+    """
+    cfg = load_config().get("humanization", {})
+    # Base speed in pixels per second (how fast the mouse moves on average)
+    base_speed = cfg.get("mouse_speed_px_per_sec", 800)
+    # Minimum duration even for tiny movements
+    min_duration = cfg.get("mouse_min_duration_sec", 0.08)
+    # Maximum duration to cap very long movements
+    max_duration = cfg.get("mouse_max_duration_sec", 0.6)
+    # Randomness factor (std as fraction of calculated duration)
+    jitter_frac = cfg.get("mouse_duration_jitter_frac", 0.15)
+    
+    # Base duration from distance
+    base_duration = distance_px / base_speed
+    
+    # Add some randomness
+    std = base_duration * jitter_frac
+    duration = _gauss(base_duration, std, min_duration, max_duration)
+    
+    return duration
+
+
 def jitter_xy(x: float, y: float, square_size: float) -> tuple[float, float]:
     """Add Gaussian jitter to click position. square_size = width/height of one square."""
     cfg = load_config().get("humanization", {})

@@ -1,12 +1,28 @@
 # Auto Chess — Example config. Copy to config.yaml and adjust.
 
-# stockfish_path: "/usr/bin/stockfish"   # optional; default: "stockfish" from PATH
+# stockfish_path: "/usr/bin/stockfish"           # Linux example
+# stockfish_path: "C:\\stockfish\\stockfish.exe"  # Windows example
+# Default: "stockfish" (uses PATH lookup)
 
+# Engine settings for maximum performance
+# These can also be adjusted via sliders in the overlay UI
 engine:
-  time_limit_seconds: 0.15
-  depth_limit: 18
+  time_limit_seconds: 5.0   # Seconds per move (higher = stronger, 0.1-30)
+  depth_limit: 30           # Max search depth (10-40)
+  hash_mb: 512              # Hash table size in MB (16-4096, more = better for longer games)
+  threads: 4                # CPU threads for parallel search (1 to your core count)
 
 # assist_poll_seconds: 2.0   # poll interval (seconds)
+
+# Humanization for auto-play (reaction delay, mouse movement, click jitter)
+# humanization:
+#   reaction_time_mean_ms: 800      # delay before starting to move
+#   reaction_time_std_ms: 150
+#   click_jitter_std_fraction: 0.15 # random offset within square (fraction of square size)
+#   mouse_speed_px_per_sec: 800     # base mouse movement speed
+#   mouse_min_duration_sec: 0.08    # minimum movement time even for short distances
+#   mouse_max_duration_sec: 0.6     # maximum movement time for long distances
+#   mouse_duration_jitter_frac: 0.15  # randomness in movement duration
 
 # Theme-agnostic template FEN (board extraction + piece matching)
 # template_fen:

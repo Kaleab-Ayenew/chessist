@@ -4,6 +4,110 @@ Living document: updated whenever the codebase or project setup changes. (Cursor
 
 ---
 
+## 2026-02-23 (Cross-Platform Build Support)
+
+- **Changed** `auto_chess.spec` — Made cross-platform: platform-conditional hidden imports (`Xlib` on Linux, `win32api`/`win32con`/`pywintypes`/`win32gui` on Windows), optional `.ico` icon on Windows.
+- **Added** `build_windows.bat` — Windows build script (installs deps, runs PyInstaller, prints instructions for Stockfish).
+- **Changed** `config.example.yaml` — Added Windows Stockfish path example alongside existing Linux example.
+- **Removed** leftover debug instrumentation from `src/agent/overlay.py`, `src/agent/assist_loop.py`, `src/agent/orient.py` (hardcoded `/home/...` debug log paths from a previous debug session).
+
+---
+
+## 2026-02-23 (Fix PyInstaller Missing Dependencies)
+
+- **Fixed** PyInstaller build — `mss` and `pyautogui` were not installed in the build environment, causing `ModuleNotFoundError` at runtime despite being listed in `hiddenimports`. Installed both packages and their transitive dependencies.
+- **Changed** `auto_chess.spec` — Added `collect_submodules` for `pyautogui` and `pyscreeze`; added `pyautogui` transitive dependencies (`pyscreeze`, `pygetwindow`, `pymsgbox`, `pytweening`, `pyperclip`, `mouseinfo`, `Xlib`) to `hiddenimports`.
+- **Removed** stale `=2.0.0` file (artifact from a malformed pip install command).
+
+---
+
+## 2026-02-23 (Fix Castling Rights for Piece-Only FEN)
+
+- **Fixed** `src/agent/decider.py` — `validate_fen()` and `_board_from_fen()` now clear castling rights and en passant square when parsing piece-only FEN. Previously, `set_board_fen()` retained default castling rights (KQkq), causing `board.is_valid()` to fail when kings had moved from starting squares (e.g., after castling). This caused valid positions like `RNBQ1RK1` to be rejected with "invalid board state".
+- **Fixed** `src/agent/screen_executor.py` — `fen_after_move()` now clears castling/ep for piece-only FEN to ensure `board.legal_moves` works correctly.
+- **Fixed** `src/agent/assist_loop.py` — Added `_board_from_fen()` helper function that properly handles piece-only FEN by clearing castling/ep. Refactored all board creation to use this helper.
+- **Fixed** `src/agent/loop.py` — Board creation from piece-only FEN now clears castling/ep.
+
+---
+
+## 2026-02-23 (Robust FEN Validation)
+
+- **Changed** `src/agent/decider.py` — `is_valid_fen()` now performs comprehensive validation to prevent corrupted board states from crashing Stockfish. Checks: exactly one king per side, no pawns on 1st/8th rank, reasonable piece counts per side (max 16), promotion-aware piece limits (e.g., can't have 9 queens if you still have 8 pawns), and python-chess `board.is_valid()`. Prevents engine crashes when vision produces garbage FEN (e.g., board obscured by another window).
+- **Added** `src/agent/decider.py` — `validate_fen()` function returns `(is_valid, reason)` tuple with detailed error messages. `is_valid_fen()` now logs warnings with specific reasons when FEN is rejected (e.g., "too many white queens (3, max 2 with 7 pawns)").
+
+---
+
+## 2026-02-23 (Maximum Stockfish Performance)
+
+- **Changed** `src/agent/config.py` — updated default engine settings for maximum performance: time 5s (was 0.15s), depth 30 (was 18), added hash_mb 512MB and threads 4. Added runtime settings storage (`get_runtime_engine_settings`, `set_runtime_engine_setting`) for UI slider control.
+- **Changed** `src/agent/decider.py` — `get_engine_limits()` now returns hash_mb and threads; added `configure_engine()` to apply UCI options (Hash, Threads) to Stockfish. Runtime settings take precedence over config file.
+- **Added** `src/agent/overlay.py` — Engine Settings section with sliders for Time (0.1-30s), Depth (10-40), Hash (16-4096MB), and Threads (1-CPU count). "Apply Hash/Threads" button to restart engine with new settings. Engine is now configured with Hash/Threads on startup.
+- **Changed** `config.example.yaml` — updated engine defaults and added documentation for hash_mb and threads options.
+
+---
+
+## 2026-02-23
+
+- **Fixed** `src/agent/screen_executor.py` — `fen_after_move()` now returns board FEN (piece placement only) instead of full FEN; added `normalize_fen()` helper to extract piece placement for comparison.
+- **Fixed** `src/agent/assist_loop.py` — FEN comparison now uses `normalize_fen()` to ensure vision output (piece-only) matches expected FEN. Previously, the agent would play moves back-to-back without waiting for opponent because full FEN never matched piece-only FEN.
+
+---
+
+## 2026-02-23
+
+- **Added** `src/agent/overlay.py` — modern light theme with soft grays and blue accent; theme toggle button in settings to switch between dark and light modes at runtime.
+
+---
+
+## 2026-02-23
+
+- **Changed** `src/agent/screen_executor.py` — mouse now moves smoothly at human-like speed instead of teleporting. Uses `pyautogui.moveTo()` with easeOutQuad easing and distance-based duration.
+- **Changed** `src/agent/humanize.py` — added `mouse_move_duration()` function that calculates movement time based on distance (Fitts's Law approximation) with configurable speed and jitter.
+- **Changed** `config.example.yaml` — documented new mouse movement humanization options: `mouse_speed_px_per_sec`, `mouse_min_duration_sec`, `mouse_max_duration_sec`, `mouse_duration_jitter_frac`.
+- **Fixed** `src/agent/overlay.py` — Stockfish now auto-restarts when it crashes instead of stopping the agent. Shows "Restarting engine…" status during restart, then resumes the assist loop on success.
+- **Fixed** `src/agent/vision_template.py` — board orientation now respects "We play" setting. When playing Black (board flipped with Black at bottom), the square-to-FEN mapping is inverted so moves are recommended for the correct squares. Previously, vision always assumed White's perspective regardless of the setting, causing wrong move recommendations when playing Black.
+
+---
+
+## 2026-02-23
+
+- **Changed** `src/agent/overlay.py` — replaced CustomTkinter with standard tkinter + ttk; added dark theme styling with custom colors, styled buttons, combobox, and checkbuttons. Eliminates X11/xcb crashes caused by CustomTkinter's darkdetect dependency.
+- **Changed** `src/agent/__main__.py` — removed CustomTkinter import check; updated docstring.
+- **Changed** `main.py` — removed X11 workaround env vars (no longer needed without CustomTkinter).
+- **Changed** `requirements.txt` — removed customtkinter dependency.
+
+---
+
+## 2026-02-19 (X11/xcb crash fix: main-thread assist loop)
+
+- **Changed** `src/agent/assist_loop.py` — added `initial_assist_step_state()`, `run_assist_loop_step()` for one-shot iterations; `run_assist_loop()` unchanged for terminal-only (--no-overlay).
+- **Changed** `src/agent/overlay.py` — assist loop no longer runs in a daemon thread; runs on main thread via `root.after()` so all X11 use (CustomTkinter, mss, pyautogui) is single-threaded, fixing "[xcb] Unknown sequence number" abort on Linux. Removed `run_assist_loop` parameter; overlay creates engine and uses step API.
+- **Changed** `src/agent/__main__.py` — `run_overlay()` no longer passed `run_assist_loop`.
+- **Changed** `main.py` — call `XInitThreads()` on Linux at startup (CustomTkinter/tk may use X from internal threads when opening the window).
+
+---
+
+## 2026-02-19 (requirements.txt: all packages)
+
+- **Changed** `requirements.txt` — added customtkinter and pyautogui so all runtime deps from pyproject.toml are listed.
+
+---
+
+## 2026-02-18 (Auto-play, control panel overlay, CustomTkinter)
+
+- **Added** Auto-play: bot executes moves on screen via pyautogui; vision returns board corners for screen coordinate mapping; humanized reaction/move delays and click jitter (config `humanization`).
+- **Added** `src/agent/screen_executor.py` — map board corners to 64 square centers, `execute_move_on_screen()`, `fen_after_move()` for FEN after our move.
+- **Added** `src/agent/vision_template.py` — `image_to_fen_template_with_corners()`; `src/agent/orient.py` — `image_to_fen_cv_with_bounds()` returning (fen, corners).
+- **Changed** `src/agent/assist_loop.py` — unified loop with getters for we_play_white, show_recommendation, auto_play, should_stop; FEN-after-our-move tracking to wait for opponent; game-over detection and callback; auto-play only when opponent moved or (we play white, first move).
+- **Added** `src/agent/decider.py` — `game_outcome_message(fen)` for overlay game-over display.
+- **Added** `src/agent/overlay.py` — CustomTkinter control panel: we play White/Black, Show move recommendation, Auto-play toggles, Start/Stop agent, move display, game-over message.
+- **Changed** `src/agent/__main__.py` — overlay is control panel (CustomTkinter); shared state for color/recommendation/auto-play; Start/Stop agent runs loop in thread; `--we-play` sets default, overlay can override.
+- **Changed** `src/agent/config.py` — default `humanization` section (reaction/move time, jitter).
+- **Changed** pyproject.toml — dependencies: customtkinter, pyautogui.
+- **Changed** config.example.yaml — commented `humanization` section.
+
+---
+
 ## 2026-02-18 (Production-ready cleanup and PyPI prep)
 
 - **Changed** Debug images (assist + test-vision) now saved to a cross-platform temp directory (`tempfile.gettempdir()/auto_chess/`) instead of project root; `.gitignore` no longer ignores `last_*.png` or `sample_screenshot.png`.

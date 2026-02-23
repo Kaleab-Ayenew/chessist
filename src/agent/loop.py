@@ -75,9 +75,13 @@ async def obtain_fen(page, board_box, *, we_play_white: bool, our_turn: Optional
                 fen = moves_to_fen(moves)
         if fen:
             try:
-                b = chess.Board(fen) if " " in fen else chess.Board()
-                if " " not in fen:
+                if " " in fen:
+                    b = chess.Board(fen)
+                else:
+                    b = chess.Board()
                     b.set_board_fen(fen)
+                    b.set_castling_fen("-")
+                    b.ep_square = None
                 white_to_move = b.turn
             except Exception:
                 pass

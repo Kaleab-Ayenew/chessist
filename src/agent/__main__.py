@@ -1,11 +1,14 @@
 """
 Entry point for python -m src.agent and for the auto-chess console script.
 Chess assist: screen capture -> template vision (board + FEN) -> Stockfish -> overlay + terminal.
+Overlay is a tkinter control panel: we play white/black, show move, auto-play, start/stop agent.
 """
 from pathlib import Path
 
-# When run from repo, project root is parent of src; when installed, cwd is primary
-_PKG_ROOT = Path(__file__).resolve().parent.parent.parent
+from src.agent.config import get_bundle_dir, get_templates_dir
+
+# When run from repo, project root is parent of src; when installed/frozen, use bundle dir
+_PKG_ROOT = get_bundle_dir()
 
 
 def _main() -> None:
@@ -23,53 +26,79 @@ def _main() -> None:
     )
     logger = logging.getLogger(__name__)
 
-    def run_assist_mode(we_play_white: bool, *, show_overlay: bool) -> None:
-        from src.agent.assist_loop import run_assist_loop
+    def run_assist_mode(we_play_white_default: bool, *, show_overlay: bool) -> None:
+
         cfg = load_config()
         poll_interval = float(cfg.get("assist_poll_seconds", 2.0))
+
+        # Shared state for overlay and loop
+        state = {
+            "we_play_white": we_play_white_default,
+            "show_recommendation": True,
+            "auto_play": False,
+            "agent_running": False,
+        }
+
+        def get_we_play_white() -> bool:
+            return state["we_play_white"]
+
+        def set_we_play_white(v: bool) -> None:
+            state["we_play_white"] = v
+
+        def get_show_recommendation() -> bool:
+            return state["show_recommendation"]
+
+        def set_show_recommendation(v: bool) -> None:
+            state["show_recommendation"] = v
+
+        def get_auto_play() -> bool:
+            return state["auto_play"]
+
+        def set_auto_play(v: bool) -> None:
+            state["auto_play"] = v
+
+        def get_agent_running() -> bool:
+            return state["agent_running"]
+
+        def start_agent() -> None:
+            state["agent_running"] = True
+
+        def stop_agent() -> None:
+            state["agent_running"] = False
+
         if show_overlay:
-            try:
-                import tkinter as tk
-            except ImportError:
-                logger.warning("tkinter not available; overlay disabled. Use --no-overlay.")
-                show_overlay = False
-        if show_overlay:
-            root = tk.Tk()
-            root.title("Chess assist")
-            root.attributes("-topmost", True)
-            root.resizable(True, False)
-            root.geometry("320x120+20+20")
-            label_uci = tk.Label(root, text="—", font=("Sans", 24), fg="#333")
-            label_uci.pack(pady=(12, 4))
-            label_san = tk.Label(root, text="", font=("Sans", 18), fg="#666")
-            label_san.pack(pady=(0, 12))
+            from src.agent.overlay import run_overlay
+            run_overlay(
+                get_we_play_white=get_we_play_white,
+                set_we_play_white=set_we_play_white,
+                get_show_recommendation=get_show_recommendation,
+                set_show_recommendation=set_show_recommendation,
+                get_auto_play=get_auto_play,
+                set_auto_play=set_auto_play,
+                get_agent_running=get_agent_running,
+                start_agent=start_agent,
+                stop_agent=stop_agent,
+                poll_interval=poll_interval,
+                should_stop=lambda: not state["agent_running"],
+            )
+            return
 
-            def on_move(uci: str, san: str) -> None:
-                def update() -> None:
-                    label_uci.config(text=uci)
-                    label_san.config(text=f"Play: {san}")
-                root.after(0, update)
+        # No overlay: terminal-only loop with fixed we_play_white
+        def get_we_play_white_const() -> bool:
+            return we_play_white_default
 
-            def quit_app() -> None:
-                root.after(0, root.destroy)
+        from src.agent.assist_loop import run_assist_loop  
 
-            def run_loop() -> None:
-                try:
-                    run_assist_loop(we_play_white, poll_interval=poll_interval, on_move=on_move)
-                except KeyboardInterrupt:
-                    quit_app()
-
-            signal.signal(signal.SIGINT, lambda s, f: quit_app())
-            thread = threading.Thread(target=run_loop, daemon=True)
-            thread.start()
-            logger.info("Assist: open your board (e.g. Chess.com). Ctrl+C to stop.")
-            root.mainloop()
-        else:
-            logger.info("Assist: recommended move in terminal only. Ctrl+C to stop.")
-            try:
-                run_assist_loop(we_play_white, poll_interval=poll_interval)
-            except KeyboardInterrupt:
-                logger.info("Stopped by user")
+        logger.info("Assist: recommended move in terminal only. Ctrl+C to stop.")
+        try:
+            run_assist_loop(
+                get_we_play_white_const,
+                poll_interval=poll_interval,
+                get_show_recommendation=lambda: True,
+                get_auto_play=lambda: False,
+            )
+        except KeyboardInterrupt:
+            logger.info("Stopped by user")
 
     def run_test_vision_template(method: str) -> None:
         import numpy as np
@@ -82,9 +111,7 @@ def _main() -> None:
         if not sample_path.exists():
             logger.error("sample_screenshot.png not found in current directory or package root.")
             return
-        templates_dir = cwd / "templates"
-        if not templates_dir.is_dir():
-            templates_dir = _PKG_ROOT / "templates"
+        templates_dir = get_templates_dir()
         if not templates_dir.is_dir():
             logger.error("templates/ directory not found.")
             return
@@ -112,10 +139,10 @@ def _main() -> None:
         else:
             print(f"No board detected (method={method}).")
 
-    parser = argparse.ArgumentParser(description="Chess assist: vision + Stockfish, overlay move")
-    parser.add_argument("--we-play", choices=["white", "black"], default="white")
+    parser = argparse.ArgumentParser(description="Chess assist: vision + Stockfish, overlay + auto-play")
+    parser.add_argument("--we-play", choices=["white", "black"], default="white", help="Default side we play (overlay can override)")
     parser.add_argument("--assist", action="store_true", default=True)
-    parser.add_argument("--no-overlay", action="store_true", help="Terminal only")
+    parser.add_argument("--no-overlay", action="store_true", help="Terminal only, no control panel")
     parser.add_argument(
         "--test-vision-template",
         nargs="?",
@@ -130,7 +157,7 @@ def _main() -> None:
         method = args.test_vision_template if args.test_vision_template in ("contour", "edges") else "contour"
         run_test_vision_template(method)
         return
-    run_assist_mode(we_play_white=(args.we_play != "black"), show_overlay=not args.no_overlay)
+    run_assist_mode(we_play_white_default=(args.we_play != "black"), show_overlay=not args.no_overlay)
 
 
 if __name__ == "__main__":

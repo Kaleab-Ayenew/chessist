@@ -4,6 +4,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+import mss
+import mss.tools
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -18,7 +20,6 @@ def capture_region(
     """
     Capture a screen region using mss. Returns RGB numpy array (H, W, 3).
     """
-    import mss
     with mss.mss() as sct:
         monitor = {"left": left, "top": top, "width": width, "height": height}
         shot = sct.grab(monitor)
@@ -33,7 +34,6 @@ def capture_full_screen(monitor_index: int = 0) -> np.ndarray:
     Capture the primary (or given) monitor. Returns RGB numpy array (H, W, 3).
     monitor_index: 0 = primary, 1, 2, ... = other monitors.
     """
-    import mss
     with mss.mss() as sct:
         mon = sct.monitors[monitor_index]
         shot = sct.grab(mon)

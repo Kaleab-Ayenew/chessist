@@ -1,8 +1,8 @@
 # Auto Chess
 
-**Chess assist:** screen capture → template-based vision (board → FEN) → Stockfish → recommended move on a **tkinter overlay** and in the terminal. No browser automation: you open Chess.com (or any board) and play; the app shows the move to play.
+**Chess assist:** screen capture → template-based vision (board → FEN) → Stockfish → recommended move on a **CustomTkinter control panel** and in the terminal. Optional **auto-play**: the bot can play moves itself with pyautogui (humanized clicks). No browser automation: you open Chess.com (or any board) and play; the app shows the move and can execute it.
 
-**Pipeline:** Screenshot (full screen) → detect board (contour or edge projection) → warp → 64 squares → template matching → FEN → Stockfish → overlay + terminal.
+**Pipeline:** Screenshot (full screen) → detect board (contour or edge projection) → warp → 64 squares → template matching → FEN → Stockfish → overlay + optional screen clicks.
 
 ---
 
@@ -54,7 +54,7 @@ pip install auto-chess
 
 Run from the project root (or any directory that has `config.yaml` and `templates/`).
 
-### 1. Assist with overlay (default)
+### 1. Assist with control panel (default)
 
 ```bash
 python main.py
@@ -62,7 +62,13 @@ python main.py
 auto-chess
 ```
 
-Open your board (e.g. Chess.com) and start a game. The overlay and terminal show the recommended move; you make the move yourself.
+A **CustomTkinter overlay** opens with:
+- **We play:** White or Black (dropdown).
+- **Show move recommendation:** toggle to show or hide the recommended move.
+- **Auto-play moves:** toggle to let the bot play moves on screen (pyautogui; humanized timing and jitter).
+- **Start / Stop agent:** start or stop the vision + Stockfish loop (move display and/or auto-play).
+
+Open your board (e.g. Chess.com), click **Start agent**, and optionally enable **Auto-play**. When the game ends, the overlay shows the result (e.g. "White wins by checkmate").
 
 ### 2. Terminal only (no overlay)
 
@@ -80,11 +86,13 @@ python main.py --test-vision-template contour
 python main.py --test-vision-template edges
 ```
 
-### 4. Which color we play
+### 4. Default color (overlay can override)
 
 ```bash
 python main.py --we-play black
 ```
+
+You can also set **We play** in the overlay after starting.
 
 ---
 
@@ -103,6 +111,9 @@ python main.py --we-play black
 | `template_fen.use_edges` | `false` | Combine intensity + edge score for pieces |
 | `template_fen.edge_weight` | `0.5` | Weight for edge score |
 | `template_fen.edge_method` | `gradient` | `gradient` or `canny` |
+| `humanization.reaction_time_mean_ms` | `800` | Delay before acting (mean ms) |
+| `humanization.move_time_mean_ms` | `250` | Delay between from/to click (mean ms) |
+| `humanization.click_jitter_std_fraction` | `0.15` | Click jitter as fraction of square size |
 
 See `config.example.yaml` for full comments.
 

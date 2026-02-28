@@ -17,3 +17,5 @@ pyyaml>=6.0
 
 # Auto-play (screen interaction)
 pyautogui>=0.9.54
+# Windows: required by pyautogui for screen/input (fixes PyInstaller hidden imports)
+pywin32>=306; sys_platform == 'win32'

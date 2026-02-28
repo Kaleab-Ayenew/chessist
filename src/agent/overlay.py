@@ -175,7 +175,7 @@ def run_overlay(
     root.title("Auto Chess")
     root.configure(bg=COLORS["bg"])
     root.attributes("-topmost", True)
-    root.geometry("380x580+20+20")
+    root.geometry("568x752+20+20")
     root.minsize(340, 540)
     root.resizable(True, True)
 

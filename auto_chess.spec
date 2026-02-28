@@ -18,7 +18,16 @@ platform_hidden = []
 if sys.platform == 'linux':
     platform_hidden += ['Xlib']
 elif sys.platform == 'win32':
-    platform_hidden += ['win32api', 'win32con', 'pywintypes', 'win32gui']
+    # pywin32 modules required by pyautogui (must have pywin32 in requirements)
+    platform_hidden += [
+        'pywin32',
+        'win32api',
+        'win32con',
+        'pywintypes',
+        'win32gui',
+        'win32process',
+        'win32clipboard',
+    ]
 
 a = Analysis(
     ['main.py'],

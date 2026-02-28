@@ -10,6 +10,8 @@
 
 [Features](#features) • [Quick Start](#quick-start) • [Usage](#usage) • [Configuration](#configuration) • [Building](#building-standalone-executable)
 
+**Project page:** Enable [GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site) from the **`/docs`** folder to host the landing page at `https://<username>.github.io/<repo-name>`.
+
 </div>
 
 ---

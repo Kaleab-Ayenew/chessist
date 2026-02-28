@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, filedialog
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -183,8 +184,20 @@ def run_overlay(
 
     from src.agent.assist_loop import initial_assist_step_state, run_assist_loop_step
     from src.agent.decider import get_engine_path, get_engine_limits, configure_engine
-    from src.agent.config import set_runtime_engine_setting
+    from src.agent.config import set_runtime_engine_setting, save_stockfish_path
     import chess.engine
+
+    STOCKFISH_ERROR_MSG = (
+        "Stockfish path not set or invalid. Download Stockfish from "
+        "https://stockfishchess.org/download/ and set the path with the Browse button above."
+    )
+
+    def _format_path_display(path: str) -> str:
+        if path == "stockfish":
+            return "Not set (using default)"
+        if len(path) <= 45:
+            return path
+        return path[:20] + "…" + path[-20:]
 
     main_frame = ttk.Frame(root, padding=20)
     main_frame.pack(fill="both", expand=True)
@@ -214,6 +227,39 @@ def run_overlay(
 
     settings_frame = ttk.Frame(main_frame)
     settings_frame.pack(fill="x", pady=(0, 10))
+
+    stockfish_frame = ttk.Frame(settings_frame)
+    stockfish_frame.pack(fill="x", pady=6)
+    ttk.Label(stockfish_frame, text="Stockfish:", style="Header.TLabel").pack(side="left", padx=(0, 10))
+    label_stockfish_path = ttk.Label(
+        stockfish_frame,
+        text=_format_path_display(get_engine_path()),
+        style="Status.TLabel",
+    )
+    label_stockfish_path.pack(side="left", fill="x", expand=True)
+
+    def on_browse_stockfish():
+        if sys.platform == "win32":
+            filetypes = [("Executable", "*.exe"), ("All", "*.*")]
+        else:
+            filetypes = [("All", "*")]
+        path = filedialog.askopenfilename(
+            title="Select Stockfish executable",
+            filetypes=filetypes,
+        )
+        if path:
+            save_stockfish_path(path)
+            label_stockfish_path.configure(text=_format_path_display(get_engine_path()))
+            label_status.configure(text="Stockfish path set", style="Status.TLabel")
+
+    btn_browse = ttk.Button(
+        stockfish_frame,
+        text="Browse",
+        style="Theme.TButton",
+        command=on_browse_stockfish,
+        width=8,
+    )
+    btn_browse.pack(side="left")
 
     color_frame = ttk.Frame(settings_frame)
     color_frame.pack(fill="x", pady=6)
@@ -341,7 +387,7 @@ def run_overlay(
             logger.info("Engine restarted with new settings")
         except Exception as e:
             logger.error("Failed to restart engine: %s", e)
-            label_status.configure(text="Restart failed", style="Warning.TLabel")
+            label_status.configure(text=STOCKFISH_ERROR_MSG, style="Warning.TLabel")
 
     btn_restart_engine = ttk.Button(
         restart_frame,
@@ -386,6 +432,7 @@ def run_overlay(
             return True
         except Exception as e:
             logger.error("Could not restart Stockfish: %s", e)
+            label_status.configure(text=STOCKFISH_ERROR_MSG, style="Warning.TLabel")
             return False
 
     def do_step() -> None:
@@ -433,13 +480,13 @@ def run_overlay(
         try:
             engine = chess.engine.SimpleEngine.popen_uci(path)
             configure_engine(engine)
-        except FileNotFoundError:
-            logger.error("Stockfish not found at %s. Install it or set stockfish_path in config.", path)
-            label_status.configure(text="Stockfish not found", style="Warning.TLabel")
+        except (FileNotFoundError, OSError) as e:
+            logger.error("Stockfish not found at %s: %s", path, e)
+            label_status.configure(text=STOCKFISH_ERROR_MSG, style="Warning.TLabel")
             return
         except Exception as e:
             logger.error("Failed to start Stockfish: %s", e)
-            label_status.configure(text=f"Engine error: {e}", style="Warning.TLabel")
+            label_status.configure(text=STOCKFISH_ERROR_MSG, style="Warning.TLabel")
             return
         btn_start.configure(state="disabled")
         btn_stop.configure(state="normal")

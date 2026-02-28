@@ -77,12 +77,15 @@ def execute_move_on_screen(
     uci: str,
     *,
     apply_jitter: bool = True,
+    we_play_white: bool = True,
 ) -> bool:
     """
     Perform move on screen: smoothly move mouse to from-square, click, move to to-square, click.
     Uses humanized delays, jitter, and smooth mouse movement at human-like speed.
     corners: (4, 2) board corners in screen coords.
     uci: e.g. 'e2e4'.
+    we_play_white: if False, the board is displayed from black's perspective (flipped); we mirror
+        square indices so clicks land on the correct squares.
     Returns True if clicks were performed.
     """
     try:
@@ -106,6 +109,13 @@ def execute_move_on_screen(
     if from_idx < 0 or to_idx < 0:
         logger.warning("Invalid square in UCI: %s", uci)
         return False
+
+    # When playing black, the board on screen is typically rotated 180° (black at bottom, black's
+    # left on left); our corners map warped coords assuming white at bottom. Mirror both rank and
+    # file so clicks land on the correct squares (63 - sq = full 180° flip).
+    if not we_play_white:
+        from_idx = 63 - from_idx
+        to_idx = 63 - to_idx
 
     x_from, y_from = float(centers[from_idx, 0]), float(centers[from_idx, 1])
     x_to, y_to = float(centers[to_idx, 0]), float(centers[to_idx, 1])

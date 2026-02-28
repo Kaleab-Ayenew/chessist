@@ -46,6 +46,9 @@ AssistStepState = Dict[str, Any]
 
 _DEBUG_DIR = get_debug_dir()
 LAST_SCREENSHOT_PATH = _DEBUG_DIR / "last_assist_screenshot.png"
+
+# Piece placement of the starting position; used to detect "white hasn't moved yet" when we play black.
+INITIAL_BOARD_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
 LAST_BOARD_MARKED_PATH = _DEBUG_DIR / "last_board_marked.png"
 LAST_BOARD_WARPED_PATH = _DEBUG_DIR / "last_board_warped.png"
 LAST_BOARD_EDGES_PATH = _DEBUG_DIR / "last_board_edges.png"
@@ -137,7 +140,7 @@ def run_assist_loop_step(
         if not fen or is_empty_board_fen(fen):
             logger.info("Vision: no board detected")
             next_state["last_fen"] = None
-            next_state["fen_after_our_move"] = None
+            # Keep fen_after_our_move so we don't get stuck as black after a transient vision failure
             return (next_state, poll_interval)
 
         logger.info("Vision: FEN obtained")
@@ -159,7 +162,9 @@ def run_assist_loop_step(
                 if normalize_fen(fen) == normalize_fen(fen_after_our_move):
                     return (next_state, poll_interval)
             elif not we_play_white:
-                return (next_state, poll_interval)
+                # Wait for white's first move only at initial position; otherwise we may have recovered from a vision glitch
+                if normalize_fen(fen) == INITIAL_BOARD_FEN:
+                    return (next_state, poll_interval)
 
             move = best_move(fen, white_to_move=we_play_white, engine=engine)
             if not move:
@@ -172,7 +177,9 @@ def run_assist_loop_step(
                 san = uci
             if show_rec and on_move:
                 on_move(uci, san)
-            executed = execute_move_on_screen(corners, uci, apply_jitter=True)
+            executed = execute_move_on_screen(
+                corners, uci, apply_jitter=True, we_play_white=we_play_white
+            )
             if executed:
                 next_fen = fen_after_move(fen, uci, white_to_move=we_play_white)
                 next_state["fen_after_our_move"] = next_fen
@@ -288,7 +295,7 @@ def run_assist_loop(
                 if not fen or is_empty_board_fen(fen):
                     logger.info("Vision: no board detected")
                     last_fen = None
-                    fen_after_our_move = None
+                    # Keep fen_after_our_move so we don't get stuck as black after a transient vision failure
                     time.sleep(poll_interval)
                     continue
 
@@ -319,9 +326,10 @@ def run_assist_loop(
                             continue
                         # Opponent has moved; play our move
                     elif not we_play_white:
-                        # We play black; fen_after_our_move None means wait for white's first move
-                        time.sleep(poll_interval)
-                        continue
+                        # Wait for white's first move only at initial position; otherwise we may have recovered from a vision glitch
+                        if normalize_fen(fen) == INITIAL_BOARD_FEN:
+                            time.sleep(poll_interval)
+                            continue
                     # Get best move and execute
                     move = best_move(fen, white_to_move=we_play_white, engine=engine)
                     if not move:
@@ -336,7 +344,9 @@ def run_assist_loop(
 
                     if show_rec and on_move:
                         on_move(uci, san)
-                    executed = execute_move_on_screen(corners, uci, apply_jitter=True)
+                    executed = execute_move_on_screen(
+                        corners, uci, apply_jitter=True, we_play_white=we_play_white
+                    )
                     if executed:
                         next_fen = fen_after_move(fen, uci, white_to_move=we_play_white)
                         fen_after_our_move = next_fen

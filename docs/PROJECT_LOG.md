@@ -4,6 +4,17 @@ Living document: updated whenever the codebase or project setup changes. (Cursor
 
 ---
 
+## 2026-02-28
+
+- **Changed** `src/agent/config.py` — Defaults now match the project config.yaml (engine 0.15s/18 depth, humanization, prefer_dom, chess_com_base, assist_region, template_fen). On first run, if config.yaml does not exist, the app writes these defaults to config.yaml in CONFIG_DIR and uses that file from then on; `_ensure_default_config_file()` creates the file, and `load_config()` switches CONFIG_PATH to it once created.
+- **Added** `src/agent/overlay.py` — Stockfish path row at top of settings: label, current path (or "Not set (using default)"), and Browse button; file dialog persists path via `save_stockfish_path()` to config.yaml. Clear error when path is missing or invalid on Start/restart: message directs users to download Stockfish and set the path with Browse.
+- **Added** `src/agent/config.py` — `save_stockfish_path(path)` to read/write user config.yaml and persist `stockfish_path`.
+- **Fixed** `src/agent/screen_executor.py` — Black move execution: use full 180° flip (`63 - sq`) instead of `chess.square_mirror()` (rank-only). When the board is rotated 180° (black at bottom, black's left on left), both rank and file must be mirrored so clicks are not "one off to the left".
+- **Fixed** `src/agent/screen_executor.py` and `assist_loop.py` — When playing black, moves now click the correct squares: executor maps UCI to screen assuming white-at-bottom; when the board is displayed from black's perspective (flipped), square indices are mirrored via `chess.square_mirror` so from/to squares map to the right screen positions. Added `we_play_white` to `execute_move_on_screen()` and pass it from both assist-loop paths.
+- **Fixed** `src/agent/assist_loop.py` — Black auto-play no longer gets stuck after one move: (1) do not clear `fen_after_our_move` on transient vision failure (no board/empty), so state is preserved; (2) when playing black and `fen_after_our_move` is None, wait only if the board is the initial position (white hasn't moved yet), so we still play after recovering from a vision glitch. Applied in both `run_assist_loop_step` and `run_assist_loop`. Added `INITIAL_BOARD_FEN` constant for the check.
+
+---
+
 ## 2026-02-24
 
 - **Changed** `README.md` — Complete rewrite with modern design: centered header with badges, feature table, ASCII pipeline diagram, cleaner sections for quick start, configuration, templates, and building. Renamed project to "Chessist" in docs.

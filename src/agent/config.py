@@ -1,10 +1,13 @@
 """Load config from config.yaml and env."""
 from pathlib import Path
+import logging
 import os
 import sys
 import tempfile
 import yaml
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -46,8 +49,8 @@ else:
 _default = {
     "stockfish_path": os.environ.get("STOCKFISH_PATH", "stockfish"),
     "engine": {
-        "time_limit_seconds": 5.0,
-        "depth_limit": 30,
+        "time_limit_seconds": 0.15,
+        "depth_limit": 18,
         "hash_mb": 512,
         "threads": 4,
     },
@@ -58,6 +61,23 @@ _default = {
         "move_time_mean_ms": 250,
         "move_time_std_ms": 50,
         "click_jitter_std_fraction": 0.15,
+    },
+    "prefer_dom": True,
+    "chess_com_base": "https://www.chess.com",
+    "assist_region": {
+        "left": 283,
+        "top": 275,
+        "width": 720,
+        "height": 718,
+    },
+    "template_fen": {
+        "empty_threshold": 0.9,
+        "piece_threshold": 0.1,
+        "normalize": True,
+        "variance_empty_threshold": 100.0,
+        "use_edges": True,
+        "edge_weight": 0.8,
+        "edge_method": "gradient",
     },
 }
 
@@ -79,7 +99,24 @@ def clear_runtime_engine_settings() -> None:
     _runtime_engine_settings.clear()
 
 
+def _ensure_default_config_file() -> None:
+    """If config.yaml does not exist, write default config so the app has a persistent config from first run."""
+    if USER_CONFIG_PATH.exists():
+        return
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(USER_CONFIG_PATH, "w") as f:
+            yaml.dump(_default.copy(), f, default_flow_style=False, allow_unicode=True)
+        logger.info("Created config.yaml with defaults at %s", USER_CONFIG_PATH)
+    except OSError as e:
+        logger.warning("Could not create config.yaml at %s: %s", USER_CONFIG_PATH, e)
+
+
 def load_config():
+    global CONFIG_PATH
+    _ensure_default_config_file()
+    if USER_CONFIG_PATH.exists():
+        CONFIG_PATH = USER_CONFIG_PATH
     cfg = _default.copy()
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH) as f:
@@ -93,6 +130,18 @@ def load_config():
 
 
 USER_CONFIG_PATH = CONFIG_DIR / "config.yaml"
+
+
+def save_stockfish_path(path: str) -> None:
+    """Persist stockfish_path to the user config file (config.yaml)."""
+    user = {}
+    if USER_CONFIG_PATH.exists():
+        with open(USER_CONFIG_PATH) as f:
+            user = yaml.safe_load(f) or {}
+    user["stockfish_path"] = path
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    with open(USER_CONFIG_PATH, "w") as f:
+        yaml.dump(user, f, default_flow_style=False, allow_unicode=True)
 
 
 def get_debug_dir() -> Path:
